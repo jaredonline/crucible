@@ -1,0 +1,16 @@
+[package]
+name = "crucible-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "cru"
+path = "src/main.rs"
+
+[dependencies]
+crucible-core = { path = "../core" }
+clap = { workspace = true }
+anyhow = { workspace = true }
+comfy-table = "7.1.3"
