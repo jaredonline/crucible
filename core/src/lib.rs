@@ -1,4 +1,4 @@
-mod combat;
+pub mod combat;
 mod dice;
 pub mod monte_carlo;
 mod team;
@@ -13,7 +13,7 @@ pub struct Combat {
     heroes: Vec<Character>,
     monsters: Vec<Character>,
     initiative_order: Vec<InitiativeEntry>,
-    round: usize,
+    pub round: usize,
     debug_mode: bool,
     pub debug_log: Vec<ActivityLog>,
 }
@@ -50,6 +50,8 @@ impl Combat {
     }
 
     pub fn execute_round(&mut self) {
+        let hero_hps : Vec<usize> = self.heroes.clone().into_iter().map(|c| c.current_hp).collect();
+        let monster_hps : Vec<usize> = self.monsters.clone().into_iter().map(|c| c.current_hp).collect();
         for i in self.initiative_order.clone() {
             if self.lookup_character(i).current_hp == 0 {
                 continue;
@@ -76,15 +78,17 @@ impl Combat {
                 .unwrap()
                 .clone();
             let result = self.execute_action(i, action, target);
-            self.debug_log.push(ActivityLog {
-                round: self.round,
-                action: action.clone(),
-                actor: self.lookup_character(i).clone(),
-                target: self.lookup_character(target).clone(),
-                result: result.clone(),
-                snapshot_heroes: self.heroes.clone(),
-                snapshot_monsters: self.monsters.clone(),
-            });
+            if self.debug_mode {
+                self.debug_log.push(ActivityLog {
+                    round: self.round,
+                    action: action.clone(),
+                    actor: self.lookup_character(i).clone(),
+                    target: self.lookup_character(target).clone(),
+                    result: result.clone(),
+                    snapshot_heroes: self.heroes.clone(),
+                    snapshot_monsters: self.monsters.clone(),
+                })
+            };
         }
 
         self.round += 1;
@@ -156,6 +160,16 @@ impl Combat {
                         .take_action(self.monsters.get_mut(target_entry.index).unwrap(), action),
                 }
             }
+        }
+    }
+
+    pub fn heroes_won(&self) -> bool {
+        if self.is_ongoing() {
+            false
+        } else if self.heroes.iter().all(|c| c.current_hp == 0) {
+            false
+        } else {
+            true
         }
     }
 }

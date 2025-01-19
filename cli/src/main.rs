@@ -1,10 +1,15 @@
-use std::vec;
+use std::collections::HashMap;
+use std::fmt::format;
+use std::{iter, vec};
 
 use anyhow::Result;
 use clap::Parser;
 use comfy_table::Table;
-use crucible_core::monte_carlo::dice::run_dice_monte_carlo;
+use crucible_core::combat::build_level_one_combat;
+use crucible_core::monte_carlo::combat::combat_monte_carlo_iterator;
+use crucible_core::monte_carlo::dice::{dice_monte_carlo_iterator, run_dice_monte_carlo};
 use crucible_core::{Action, ActionResult, Character, Combat, HitResult, Team};
+use indicatif::ProgressBar;
 
 #[derive(Parser)]
 enum SubCommand {
@@ -13,6 +18,9 @@ enum SubCommand {
 
     #[command(name = "level-1-kobolds")]
     LevelOneKobolds(LevelOneKoboldsArgs),
+
+    #[command(name = "level-1-monte-carlo")]
+    LevelOneMonteCarlo(LevelOneMonteCarloArgs),
 }
 
 #[derive(Parser)]
@@ -26,6 +34,22 @@ pub struct DiceMonteCarloArgs {
 #[derive(Parser)]
 #[command(name = "dice-monte-carlo")]
 pub struct LevelOneKoboldsArgs {
+    /// Number of iterations for each die type
+    #[arg(short, long, default_value = "6")]
+    num_kobolds: usize,
+}
+
+#[derive(Parser)]
+#[command(name = "level-1-monte-carlo")]
+pub struct LevelOneMonteCarloArgs {
+    /// Number of iterations for combat
+    #[arg(short, long, default_value = "10000")]
+    iterations: usize,
+
+    /// Turn on/off verbose logging
+    #[arg(short, long, default_value = "false")]
+    verbose: bool,
+
     /// Number of iterations for each die type
     #[arg(short, long, default_value = "6")]
     num_kobolds: usize,
@@ -66,54 +90,12 @@ fn main() -> Result<()> {
     match cli.command {
         SubCommand::DiceMonteCarlo(args) => dice_monte_carlo(args),
         SubCommand::LevelOneKobolds(args) => level_one_kobolds(args),
+        SubCommand::LevelOneMonteCarlo(args) => level_one_monte_carlo(args),
     }
 }
 
 fn level_one_kobolds(args: LevelOneKoboldsArgs) -> Result<()> {
-    let fighter =
-        Character::new("Fighter", 12, 16, Team::Heroes).with_actions(vec![Action::Attack {
-            name: "Greatsword".into(),
-            hit_bonus: 5,
-            damage: "2d6+3".into(),
-        }]);
-    let cleric = Character::new("Cleric", 10, 16, Team::Heroes).with_actions(vec![
-        Action::Attack {
-            name: "Mace".into(),
-            hit_bonus: 4,
-            damage: "1d6+2".into(),
-        },
-        Action::Heal {
-            name: "Healing Word".into(),
-            healing: "1d8+3".into(),
-        },
-    ]);
-    let rogue = Character::new("Rogue", 9, 14, Team::Heroes).with_actions(vec![Action::Attack {
-        name: "Rapier".into(),
-        hit_bonus: 5,
-        damage: "1d8+3".into(),
-    }]);
-    let heroes = vec![fighter, cleric, rogue];
-
-    let kobold_dagger = Action::Attack {
-        name: "Dagger".into(),
-        hit_bonus: 4,
-        damage: "1d4+2".into(),
-    };
-    let kobold_sling = Action::Attack {
-        name: "Sling".into(),
-        hit_bonus: 4,
-        damage: "1d4+2".into(),
-    };
-    let kobold_actions = vec![kobold_dagger, kobold_sling];
-    let monsters = (0..args.num_kobolds)
-        .into_iter()
-        .map(|i| {
-            Character::new(format!("Kobold {}", i + 1), 5, 12, Team::Monsters)
-                .with_actions(kobold_actions.clone())
-        })
-        .collect();
-
-    let mut combat = Combat::new(heroes, monsters);
+    let mut combat = build_level_one_combat(args.num_kobolds);
     combat.debug(true);
     let mut table = Table::new();
     table.set_header(vec![
@@ -152,7 +134,15 @@ fn dice_monte_carlo(args: DiceMonteCarloArgs) -> Result<()> {
         "Distribution",
     ]);
 
-    let stats = run_dice_monte_carlo(args.iterations);
+    let mut iterator = dice_monte_carlo_iterator(args.iterations);
+    let bar = ProgressBar::new(iterator.clone().count() as u64);
+
+    while let Some(_) = iterator.next() {
+        bar.inc(1);
+    }
+    bar.finish();
+
+    let stats = iterator.results;
 
     for stat in stats {
         table.add_row(vec![
@@ -167,6 +157,49 @@ fn dice_monte_carlo(args: DiceMonteCarloArgs) -> Result<()> {
     println!("{table}");
 
     Ok(())
+}
+
+fn level_one_monte_carlo(args: LevelOneMonteCarloArgs) -> Result<()> {
+    let mut table = Table::new();
+    table.set_header(vec![
+        "Player Victories",
+        "Monster Victories",
+        "Average Rounds",
+        "Hero K/O Counts",
+        "Monster K/O Counts",
+        "Decisive Victories",
+        "Pyrrhic Victories",
+    ]);
+
+    let mut iterator = combat_monte_carlo_iterator(args.iterations, args.verbose, args.num_kobolds);
+    let bar = ProgressBar::new(args.iterations as u64);
+
+    while let Some(_) = iterator.next() {
+        bar.inc(1);
+    }
+    bar.finish();
+
+    let stats = iterator.stats;
+    table.add_row(vec![
+        format!("{} ({:.3}%)", stats.hero_victories, stats.hero_victories_perc * 100.0),
+        format!("{} ({:.3}%)", stats.monster_victories, stats.monster_victories_perc * 100.0),
+        format!("{:.3}", stats.average_rounds),
+        actor_ko_counts_formatted(&stats.hero_ko_counts),
+        actor_ko_counts_formatted(&stats.monster_ko_counts),
+        format!("{}", stats.decisive_victories),
+    ]);
+
+    println!("{table}");
+
+    Ok(())
+}
+
+fn actor_ko_counts_formatted(counts: &HashMap<String, usize>) -> String {
+    let mut parts = vec![];
+    for (name, kos) in counts {
+        parts.push(format!("{}: {}", name, kos));
+    }
+    parts.join("\n")
 }
 
 fn action_name(action: Action) -> String {

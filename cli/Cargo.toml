@@ -14,3 +14,4 @@ crucible-core = { path = "../core" }
 clap = { workspace = true }
 anyhow = { workspace = true }
 comfy-table = "7.1.3"
+indicatif = "0.17.9"
