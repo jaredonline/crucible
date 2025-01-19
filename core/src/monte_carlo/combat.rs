@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::collections::HashMap;
 
 use crate::{combat::build_level_one_combat, Combat};
@@ -56,31 +55,9 @@ impl CombatStats {
     }
 }
 
-pub fn run_combat_monte_carlo(iterations: usize, verbose: bool, num_kobolds: usize) -> CombatStats {
-    let mut stats = CombatStats::new();
-
-    for i in 0..iterations {
-        // Set up fresh combat with same initial state
-        let mut combat = build_level_one_combat(num_kobolds);
-        combat.debug(verbose);
-
-        // Run until completion
-        while combat.is_ongoing() {
-            combat.execute_round();
-        }
-
-        // Collect stats
-        //update_stats(&mut stats, &combat);
-    }
-
-    // Print results
-    //print_monte_carlo_results(&stats, args.iterations);
-    stats
-}
-
 pub fn combat_monte_carlo_iterator(
     iterations: usize,
-    verbose: bool,
+    _verbose: bool,
     num_kobolds: usize,
 ) -> CombatMonteCarloIterator {
     let collection = CombatMonteCarloCollection {

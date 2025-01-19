@@ -50,8 +50,6 @@ impl Combat {
     }
 
     pub fn execute_round(&mut self) {
-        let hero_hps : Vec<usize> = self.heroes.clone().into_iter().map(|c| c.current_hp).collect();
-        let monster_hps : Vec<usize> = self.monsters.clone().into_iter().map(|c| c.current_hp).collect();
         for i in self.initiative_order.clone() {
             if self.lookup_character(i).current_hp == 0 {
                 continue;

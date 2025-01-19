@@ -1,14 +1,13 @@
 use std::collections::HashMap;
-use std::fmt::format;
-use std::{iter, vec};
+use std::vec;
 
 use anyhow::Result;
 use clap::Parser;
 use comfy_table::Table;
 use crucible_core::combat::build_level_one_combat;
 use crucible_core::monte_carlo::combat::combat_monte_carlo_iterator;
-use crucible_core::monte_carlo::dice::{dice_monte_carlo_iterator, run_dice_monte_carlo};
-use crucible_core::{Action, ActionResult, Character, Combat, HitResult, Team};
+use crucible_core::monte_carlo::dice::dice_monte_carlo_iterator;
+use crucible_core::{Action, ActionResult, Character, HitResult};
 use indicatif::ProgressBar;
 
 #[derive(Parser)]
@@ -181,8 +180,16 @@ fn level_one_monte_carlo(args: LevelOneMonteCarloArgs) -> Result<()> {
 
     let stats = iterator.stats;
     table.add_row(vec![
-        format!("{} ({:.3}%)", stats.hero_victories, stats.hero_victories_perc * 100.0),
-        format!("{} ({:.3}%)", stats.monster_victories, stats.monster_victories_perc * 100.0),
+        format!(
+            "{} ({:.3}%)",
+            stats.hero_victories,
+            stats.hero_victories_perc * 100.0
+        ),
+        format!(
+            "{} ({:.3}%)",
+            stats.monster_victories,
+            stats.monster_victories_perc * 100.0
+        ),
         format!("{:.3}", stats.average_rounds),
         actor_ko_counts_formatted(&stats.hero_ko_counts),
         actor_ko_counts_formatted(&stats.monster_ko_counts),
