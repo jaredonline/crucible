@@ -31,6 +31,7 @@ impl Action {
                 .map(|(i, c)| InitiativeEntry {
                     team: c.team,
                     index: i,
+                    initiative: 0,
                 })
                 .collect(),
             Action::Heal { .. } => allies
@@ -40,6 +41,7 @@ impl Action {
                 .map(|(i, c)| InitiativeEntry {
                     team: c.team,
                     index: i,
+                    initiative: 0,
                 })
                 .collect(),
         }

@@ -11,7 +11,8 @@ pub struct CombatStats {
     pub hero_ko_counts: HashMap<String, usize>, // How often each hero went down
     pub monster_ko_counts: HashMap<String, usize>,
     pub decisive_victories: usize, // All enemies dead, all heroes alive
-    pub pyrrhic_victories: usize,  // Heroes win but most are down
+    pub decisive_victories_perc: f64,
+    pub pyrrhic_victories: usize, // Heroes win but most are down
 
     round_counts: Vec<usize>,
 }
@@ -27,6 +28,7 @@ impl Default for CombatStats {
             hero_ko_counts: HashMap::new(),
             monster_ko_counts: HashMap::new(),
             decisive_victories: 0,
+            decisive_victories_perc: 0.0,
             pyrrhic_victories: 0,
 
             round_counts: vec![],
@@ -52,6 +54,7 @@ impl CombatStats {
 
         self.hero_victories_perc = self.hero_victories as f64 / len;
         self.monster_victories_perc = self.monster_victories as f64 / len;
+        self.decisive_victories_perc = self.decisive_victories as f64 / len;
     }
 }
 

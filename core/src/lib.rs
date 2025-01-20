@@ -1,11 +1,12 @@
 pub mod combat;
 mod dice;
+pub mod dnd;
 pub mod monte_carlo;
 mod team;
 
 pub use combat::{Action, ActionResult, ActivityLog, Character, HitResult, InitiativeEntry};
 pub use dice::{roll_dice, DicePool};
-use rand::{seq::SliceRandom, thread_rng};
+use rand::seq::SliceRandom;
 pub use team::Team;
 
 #[derive(Debug)]
@@ -34,18 +35,34 @@ impl Combat {
         self.debug_mode = val;
     }
 
+    pub fn hero_levels(&self) -> Vec<usize> {
+        vec![1; self.heroes.len()]
+    }
+
+    pub fn monster_crs(&self) -> Vec<f64> {
+        vec![0.125; self.monsters.len()]
+    }
+
     pub fn roll_initiative(&mut self) {
         let mut entries: Vec<InitiativeEntry> = (0..self.heroes.len())
-            .map(|i| InitiativeEntry {
-                team: Team::Heroes,
-                index: i,
+            .map(|i| {
+                let initiative = self.heroes[i].roll_initiative();
+                InitiativeEntry {
+                    team: Team::Heroes,
+                    index: i,
+                    initiative,
+                }
             })
-            .chain((0..self.monsters.len()).map(|i| InitiativeEntry {
-                team: Team::Monsters,
-                index: i,
+            .chain((0..self.monsters.len()).map(|i| {
+                let initiative = self.monsters[i].roll_initiative();
+                InitiativeEntry {
+                    team: Team::Monsters,
+                    index: i,
+                    initiative,
+                }
             }))
             .collect();
-        entries.shuffle(&mut thread_rng());
+        entries.sort_by(|a, b| b.initiative.cmp(&a.initiative));
         self.initiative_order = entries;
     }
 
@@ -177,7 +194,7 @@ mod tests {
     use super::*;
 
     fn create_fighter() -> Character {
-        let mut fighter = Character::new("Fighter", 10, 15, Team::Heroes);
+        let mut fighter = Character::new("Fighter", 10, 15, Team::Heroes, 1);
         fighter.add_action(Action::Attack {
             name: "Shortsword".into(),
             hit_bonus: 4,
@@ -187,7 +204,7 @@ mod tests {
     }
 
     fn create_kobold() -> Character {
-        let mut kobold = Character::new("Kobold", 5, 12, Team::Monsters);
+        let mut kobold = Character::new("Kobold", 5, 12, Team::Monsters, 0);
         kobold.add_action(Action::Attack {
             name: "Dagger".into(),
             hit_bonus: 2,
@@ -222,9 +239,9 @@ mod tests {
     #[test]
     fn test_targeting() {
         let fighter1 = create_fighter();
-        let fighter2 = Character::new("Fighter 2", 10, 15, Team::Heroes);
+        let fighter2 = Character::new("Fighter 2", 10, 15, Team::Heroes, 1);
         let kobold1 = create_kobold();
-        let kobold2 = Character::new("Kobold 2", 5, 12, Team::Monsters);
+        let kobold2 = Character::new("Kobold 2", 5, 12, Team::Monsters, 0);
 
         let combat = Combat::new(vec![fighter1, fighter2], vec![kobold1, kobold2]);
 
@@ -298,7 +315,7 @@ mod tests {
 
     #[test]
     fn test_attack_guaranteed_hit() {
-        let mut pc = Character::new("Fighter", 10, 15, Team::Heroes);
+        let mut pc = Character::new("Fighter", 10, 15, Team::Heroes, 1);
         pc.add_action(Action::Attack {
             name: "Magic Sword".into(),
             hit_bonus: 19,
@@ -318,7 +335,7 @@ mod tests {
     #[test]
     fn test_attack_guaranteed_miss() {
         let pc = create_fighter();
-        let mut kobold = Character::new("Kobold", 5, 30, Team::Monsters); // Very high AC
+        let mut kobold = Character::new("Kobold", 5, 30, Team::Monsters, 0); // Very high AC
 
         // Even with a roll of 17 it will miss (17 + 2 < 30)
         let result = pc.take_action(&mut kobold, &pc.actions[0]);
@@ -373,13 +390,13 @@ mod tests {
     fn test_action_validation() {
         // Set up a party: Fighter and Cleric vs two Kobolds
         let fighter =
-            Character::new("Fighter", 10, 15, Team::Heroes).with_actions(vec![Action::Attack {
+            Character::new("Fighter", 10, 15, Team::Heroes, 1).with_actions(vec![Action::Attack {
                 name: "Shortsword".into(),
                 hit_bonus: 4,
                 damage: "1d6+2".into(),
             }]);
 
-        let cleric = Character::new("Cleric", 8, 14, Team::Heroes).with_actions(vec![
+        let cleric = Character::new("Cleric", 8, 14, Team::Heroes, 2).with_actions(vec![
             Action::Attack {
                 name: "Mace".into(),
                 hit_bonus: 2,
@@ -391,8 +408,8 @@ mod tests {
             },
         ]);
 
-        let kobold1 = Character::new("Kobold 1", 5, 12, Team::Monsters);
-        let kobold2 = Character::new("Kobold 2", 5, 12, Team::Monsters);
+        let kobold1 = Character::new("Kobold 1", 5, 12, Team::Monsters, 0);
+        let kobold2 = Character::new("Kobold 2", 5, 12, Team::Monsters, 0);
 
         let mut combat = Combat::new(vec![fighter, cleric], vec![kobold1, kobold2]);
 

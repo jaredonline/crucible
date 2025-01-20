@@ -8,10 +8,17 @@ pub struct Character {
     pub ac: usize,
     pub actions: Vec<Action>,
     pub team: Team,
+    pub initiative_bonus: isize,
 }
 
 impl Character {
-    pub fn new<T: Into<String>>(name: T, max_hp: usize, ac: usize, team: Team) -> Self {
+    pub fn new<T: Into<String>>(
+        name: T,
+        max_hp: usize,
+        ac: usize,
+        team: Team,
+        initiative_bonus: isize,
+    ) -> Self {
         Character {
             name: name.into(),
             max_hp,
@@ -19,6 +26,7 @@ impl Character {
             ac,
             actions: vec![],
             team,
+            initiative_bonus,
         }
     }
 
@@ -91,10 +99,15 @@ impl Character {
             .cloned()
             .collect()
     }
+
+    pub fn roll_initiative(&self) -> isize {
+        DicePool::d20().add_modifier(self.initiative_bonus).roll()
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct InitiativeEntry {
     pub team: Team,
     pub index: usize,
+    pub initiative: isize,
 }

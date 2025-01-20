@@ -1,14 +1,18 @@
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::vec;
 
 use anyhow::Result;
 use clap::Parser;
 use comfy_table::Table;
 use crucible_core::combat::build_level_one_combat;
+use crucible_core::dnd::mcdm::MCDMDifficultyCalculator;
+use crucible_core::dnd::wizards::{WizardDifficultyCalculator2014, WizardDifficultyCalculator2024};
+use crucible_core::dnd::DifficultyCalculator;
 use crucible_core::monte_carlo::combat::combat_monte_carlo_iterator;
 use crucible_core::monte_carlo::dice::dice_monte_carlo_iterator;
 use crucible_core::{Action, ActionResult, Character, HitResult};
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 
 #[derive(Parser)]
 enum SubCommand {
@@ -139,7 +143,7 @@ fn dice_monte_carlo(args: DiceMonteCarloArgs) -> Result<()> {
     while let Some(_) = iterator.next() {
         bar.inc(1);
     }
-    bar.finish();
+    bar.finish_and_clear();
 
     let stats = iterator.results;
 
@@ -167,16 +171,36 @@ fn level_one_monte_carlo(args: LevelOneMonteCarloArgs) -> Result<()> {
         "Hero K/O Counts",
         "Monster K/O Counts",
         "Decisive Victories",
-        "Pyrrhic Victories",
+        //"Pyrrhic Victories",
+        "MCDM Difficulty",
+        "Wizards Difficulty",
     ]);
 
     let mut iterator = combat_monte_carlo_iterator(args.iterations, args.verbose, args.num_kobolds);
     let bar = ProgressBar::new(args.iterations as u64);
+    bar.set_style(
+        ProgressStyle::with_template(
+            "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] ({eta})",
+        )
+        .unwrap()
+        .with_key("eta", |state: &ProgressState, w: &mut dyn Write| {
+            write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap()
+        })
+        .progress_chars("#>-"),
+    );
 
     while let Some(_) = iterator.next() {
         bar.inc(1);
     }
-    bar.finish();
+    bar.finish_and_clear();
+
+    let combat = build_level_one_combat(args.num_kobolds);
+    let mcdm: DifficultyCalculator<MCDMDifficultyCalculator> =
+        DifficultyCalculator::new(combat.hero_levels(), combat.monster_crs());
+    let wizards2014: DifficultyCalculator<WizardDifficultyCalculator2014> =
+        DifficultyCalculator::new(combat.hero_levels(), combat.monster_crs());
+    let wizards2024: DifficultyCalculator<WizardDifficultyCalculator2024> =
+        DifficultyCalculator::new(combat.hero_levels(), combat.monster_crs());
 
     let stats = iterator.stats;
     table.add_row(vec![
@@ -193,7 +217,17 @@ fn level_one_monte_carlo(args: LevelOneMonteCarloArgs) -> Result<()> {
         format!("{:.3}", stats.average_rounds),
         actor_ko_counts_formatted(&stats.hero_ko_counts),
         actor_ko_counts_formatted(&stats.monster_ko_counts),
-        format!("{}", stats.decisive_victories),
+        format!(
+            "{} ({:.3}%)",
+            stats.decisive_victories,
+            stats.decisive_victories_perc * 100.0
+        ),
+        format!("{}", String::from(mcdm.calculate())),
+        format!(
+            "2014: {}\n2024: {}",
+            String::from(wizards2014.calculate()),
+            String::from(wizards2024.calculate())
+        ),
     ]);
 
     println!("{table}");

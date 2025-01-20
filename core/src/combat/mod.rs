@@ -10,12 +10,12 @@ use crate::{Combat, Team};
 
 pub fn build_level_one_combat(num_kobolds: usize) -> Combat {
     let fighter =
-        Character::new("Fighter", 12, 16, Team::Heroes).with_actions(vec![Action::Attack {
+        Character::new("Fighter", 12, 16, Team::Heroes, 1).with_actions(vec![Action::Attack {
             name: "Greatsword".into(),
             hit_bonus: 5,
             damage: "2d6+3".into(),
         }]);
-    let cleric = Character::new("Cleric", 10, 16, Team::Heroes).with_actions(vec![
+    let cleric = Character::new("Cleric", 10, 16, Team::Heroes, 0).with_actions(vec![
         Action::Attack {
             name: "Mace".into(),
             hit_bonus: 4,
@@ -26,11 +26,12 @@ pub fn build_level_one_combat(num_kobolds: usize) -> Combat {
             healing: "1d8+3".into(),
         },
     ]);
-    let rogue = Character::new("Rogue", 9, 14, Team::Heroes).with_actions(vec![Action::Attack {
-        name: "Rapier".into(),
-        hit_bonus: 5,
-        damage: "1d8+3".into(),
-    }]);
+    let rogue =
+        Character::new("Rogue", 9, 14, Team::Heroes, 3).with_actions(vec![Action::Attack {
+            name: "Rapier".into(),
+            hit_bonus: 5,
+            damage: "1d8+3".into(),
+        }]);
     let heroes = vec![fighter, cleric, rogue];
 
     let kobold_dagger = Action::Attack {
@@ -47,7 +48,7 @@ pub fn build_level_one_combat(num_kobolds: usize) -> Combat {
     let monsters = (0..num_kobolds)
         .into_iter()
         .map(|i| {
-            Character::new(format!("Kobold {}", i + 1), 5, 12, Team::Monsters)
+            Character::new(format!("Kobold {}", i + 1), 5, 12, Team::Monsters, 2)
                 .with_actions(kobold_actions.clone())
         })
         .collect();
