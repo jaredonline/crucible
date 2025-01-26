@@ -212,7 +212,7 @@ impl Resources {
         }
     }
 
-    fn recover(&mut self, resource_type: ResourceType, amount: usize) {
+    fn _recover(&mut self, resource_type: ResourceType, amount: usize) {
         let current = self.resources.get_mut(&resource_type);
         let max = self.max_resources.get(&resource_type).unwrap();
 
@@ -279,11 +279,11 @@ mod resource_tests {
         assert_eq!(resources.get(&ResourceType::Points("Ki".into())), 3);
 
         // Recovery up to max
-        resources.recover(ResourceType::Points("Ki".into()), 1);
+        resources._recover(ResourceType::Points("Ki".into()), 1);
         assert_eq!(resources.get(&ResourceType::Points("Ki".into())), 4);
 
         // Can't recover beyond max
-        resources.recover(ResourceType::Points("Ki".into()), 2);
+        resources._recover(ResourceType::Points("Ki".into()), 2);
         assert_eq!(resources.get(&ResourceType::Points("Ki".into())), 5);
     }
 
