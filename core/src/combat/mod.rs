@@ -1,11 +1,13 @@
 mod action;
 mod actor;
+mod conditions;
 mod log;
 
 use std::{collections::HashMap, vec};
 
 pub use action::{Action, ActionResult, HitResult};
 pub use actor::{Character, InitiativeEntry, ResourceType};
+pub use conditions::{Condition, Duration, Effect};
 pub use log::ActivityLog;
 
 use crate::{Combat, Team};

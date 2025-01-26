@@ -2,6 +2,11 @@ use std::{collections::HashMap, hash::Hash};
 
 use crate::{Action, ActionResult, DicePool, HitResult, Team};
 
+use super::{
+    conditions::{ConditionType, Effect},
+    Condition,
+};
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Character {
     pub name: String,
@@ -13,6 +18,7 @@ pub struct Character {
     pub initiative_bonus: isize,
 
     resources: Resources,
+    active_conditions: Vec<Condition>,
 }
 
 impl Character {
@@ -32,6 +38,7 @@ impl Character {
             team,
             initiative_bonus,
             resources: Resources::new(),
+            active_conditions: vec![],
         }
     }
 
@@ -116,6 +123,16 @@ impl Character {
     }
 
     pub fn valid_actions(&self, allies: &Vec<Character>, enemies: &Vec<Character>) -> Vec<Action> {
+        // If any conditions on the Actor prevent them from taking actions,
+        // short-circuit action selection
+        if self.active_conditions.iter().any(|con| {
+            con.effects
+                .iter()
+                .any(|eff| eff == &Effect::CantTakeActions)
+        }) {
+            return vec![];
+        }
+
         self.actions
             .iter()
             .filter(|a| a.is_valid(self, allies, enemies))
@@ -149,6 +166,41 @@ impl Character {
     pub fn has_resource(&self, resource_type: &ResourceType, amount: usize) -> bool {
         let resource = self.resources.get(resource_type);
         resource >= amount
+    }
+
+    pub fn add_condition(&mut self, condition: Condition) {
+        self.active_conditions.push(condition);
+    }
+
+    pub fn has_condition(&self, condition: ConditionType) -> bool {
+        self.active_conditions
+            .iter()
+            .any(|con| con.condition == condition)
+    }
+
+    pub fn end_turn(&mut self) {
+        let surviving_conditions: Vec<Condition> = self
+            .active_conditions
+            .iter()
+            .filter_map(|con| {
+                if con.duration.remaining() > 1 {
+                    Some(Condition::copy_deprecate_duration(con))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        self.active_conditions = surviving_conditions;
+    }
+
+    pub fn has_disadvantage_on(&self, action: &Action) -> bool {
+        self.active_conditions.iter().any(|condition| match action {
+            Action::Attack { .. } => condition
+                .effects
+                .iter()
+                .any(|effect| effect == &Effect::DisadvantageOnAttacks),
+            _ => false,
+        })
     }
 }
 

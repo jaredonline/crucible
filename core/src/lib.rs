@@ -100,6 +100,7 @@ impl Combat {
                 .unwrap()
                 .clone();
             let result = self.execute_action(i, action, target);
+            self.end_turn(i);
             if self.debug_mode {
                 self.debug_log.push(ActivityLog {
                     round: self.round,
@@ -119,6 +120,18 @@ impl Combat {
     pub fn is_ongoing(&self) -> bool {
         !(self.heroes.iter().all(|c| c.current_hp == 0)
             || self.monsters.iter().all(|c| c.current_hp == 0))
+    }
+
+    fn end_turn(&mut self, init: InitiativeEntry) {
+        let actor = match init.team {
+            Team::Heroes => self.heroes.get_mut(init.index),
+            Team::Monsters => self.monsters.get_mut(init.index)
+        };
+
+        match actor {
+            Some(a) => a.end_turn(),
+            _ => {}
+        }
     }
 
     fn valid_targets_for(&self, character: &Character) -> &Vec<Character> {
