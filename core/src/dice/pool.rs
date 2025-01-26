@@ -6,7 +6,7 @@ use crate::AdvantageType;
 
 use super::roll::{DiceRollResult, RollResult};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DicePool {
     pub dice: Vec<Dice>,
     pub modifier: isize,
@@ -243,7 +243,7 @@ impl From<String> for DicePool {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Dice {
     pub sides: usize,
     pub count: usize,

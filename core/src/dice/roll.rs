@@ -1,4 +1,4 @@
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RollResult {
     pub rolls: Vec<DiceRollResult>,
     pub modifier: isize,
@@ -23,7 +23,7 @@ impl RollResult {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DiceRollResult {
     pub descriptor: String,
     pub roll: isize,

@@ -247,6 +247,7 @@ fn action_name(action: Action) -> String {
     match action {
         Action::Attack { name, .. } => format!("Attack with {}", name).into(),
         Action::Heal { name, .. } => format!("Heal with {}", name).into(),
+        Action::SecondWind { .. } => format!("Second wind used!"),
     }
 }
 

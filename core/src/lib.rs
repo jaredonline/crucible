@@ -80,12 +80,19 @@ impl Combat {
             let valid_targets = match i.team {
                 Team::Heroes => {
                     let hero = &self.heroes[i.index];
-                    action.valid_targets(self.teammates_for(hero), self.valid_targets_for(hero))
+                    action.valid_targets(
+                        hero,
+                        self.teammates_for(hero),
+                        self.valid_targets_for(hero),
+                    )
                 }
                 Team::Monsters => {
                     let monster = &self.monsters[i.index];
-                    action
-                        .valid_targets(self.teammates_for(monster), self.valid_targets_for(monster))
+                    action.valid_targets(
+                        monster,
+                        self.teammates_for(monster),
+                        self.valid_targets_for(monster),
+                    )
                 }
             };
             let target = valid_targets
@@ -156,7 +163,7 @@ impl Combat {
     ) -> ActionResult {
         match actor_entry.team {
             Team::Heroes => {
-                let actor = &self.heroes[actor_entry.index].clone();
+                let actor = &mut self.heroes[actor_entry.index].clone();
                 match target_entry.team {
                     Team::Heroes => {
                         actor.take_action(self.heroes.get_mut(target_entry.index).unwrap(), action)
@@ -166,7 +173,7 @@ impl Combat {
                 }
             }
             Team::Monsters => {
-                let actor = &self.monsters[actor_entry.index].clone();
+                let actor = &mut self.monsters[actor_entry.index].clone();
                 match target_entry.team {
                     Team::Heroes => {
                         actor.take_action(self.heroes.get_mut(target_entry.index).unwrap(), action)
@@ -191,10 +198,13 @@ impl Combat {
 
 #[cfg(test)]
 mod tests {
+    use combat::ResourceType;
+
     use super::*;
 
     fn create_fighter() -> Character {
         let mut fighter = Character::new("Fighter", 10, 15, Team::Heroes, 1);
+        fighter.add_resource(ResourceType::Feature("Second Wind".into()), 1);
         fighter.add_action(Action::Attack {
             name: "Shortsword".into(),
             hit_bonus: 4,
@@ -288,10 +298,11 @@ mod tests {
 
     #[test]
     fn test_basic_attack() {
-        let fighter = create_fighter();
+        let mut fighter = create_fighter();
         let mut kobold = create_kobold();
 
-        let result = fighter.take_action(&mut kobold, &fighter.actions[0]); // Use first attack
+        let actions = fighter.actions.clone();
+        let result = fighter.take_action(&mut kobold, &actions[0]); // Use first attack
 
         match result {
             ActionResult::Attack { hit, damage } => {
@@ -325,7 +336,8 @@ mod tests {
 
         // Even with a roll of 4 it will hit (4 + 8 >= 12)
         // This should hit unless we roll a natural 1
-        let result = pc.take_action(&mut kobold, &pc.actions[0]);
+        let actions = pc.actions.clone();
+        let result = pc.take_action(&mut kobold, &actions[0]);
 
         assert!(matches!(result, ActionResult::Attack { .. }));
         //  assert!(result.damage >= 5); // Damage should be 5-12 (1d8+4)
@@ -334,11 +346,12 @@ mod tests {
 
     #[test]
     fn test_attack_guaranteed_miss() {
-        let pc = create_fighter();
+        let mut pc = create_fighter();
         let mut kobold = Character::new("Kobold", 5, 30, Team::Monsters, 0); // Very high AC
 
         // Even with a roll of 17 it will miss (17 + 2 < 30)
-        let result = pc.take_action(&mut kobold, &pc.actions[0]);
+        let actions = pc.actions.clone();
+        let result = pc.take_action(&mut kobold, &actions[0]);
 
         match result {
             ActionResult::Attack { hit, .. } => {
@@ -405,6 +418,7 @@ mod tests {
             Action::Heal {
                 name: "Cure Wounds".into(),
                 healing: "1d8+3".into(),
+                required_resources: vec![],
             },
         ]);
 
@@ -454,7 +468,7 @@ mod tests {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AdvantageType {
     Advantage,
     Disadvantage,

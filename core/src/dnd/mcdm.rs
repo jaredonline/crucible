@@ -71,7 +71,7 @@ static HARD_CR_PER_LEVEL: phf::Map<&'static str, f64> = phf_map! {
     "20" => 10.0,
 };
 
-static CR_CAP_PER_LEVEL: phf::Map<&'static str, usize> = phf_map! {
+static _CR_CAP_PER_LEVEL: phf::Map<&'static str, usize> = phf_map! {
     "1" => 1,
     "2" => 3,
     "3" => 4,

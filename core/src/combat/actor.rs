@@ -1,6 +1,8 @@
+use std::{collections::HashMap, hash::Hash};
+
 use crate::{Action, ActionResult, DicePool, HitResult, Team};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Character {
     pub name: String,
     pub max_hp: usize,
@@ -9,6 +11,8 @@ pub struct Character {
     pub actions: Vec<Action>,
     pub team: Team,
     pub initiative_bonus: isize,
+
+    resources: Resources,
 }
 
 impl Character {
@@ -27,10 +31,11 @@ impl Character {
             actions: vec![],
             team,
             initiative_bonus,
+            resources: Resources::new(),
         }
     }
 
-    pub fn take_action(&self, target: &mut Character, action: &Action) -> ActionResult {
+    pub fn take_action(&mut self, target: &mut Character, action: &Action) -> ActionResult {
         match action {
             Action::Attack {
                 name: _,
@@ -72,12 +77,30 @@ impl Character {
                     }
                 }
             }
-            Action::Heal { name: _, healing } => {
-                let healing = healing.roll() as usize;
+            Action::Heal {
+                healing,
+                required_resources,
+                ..
+            }
+            | Action::SecondWind {
+                healing,
+                required_resources,
+                ..
+            } => {
+                let resources_spent = required_resources.iter().all(|(resource, amount)| {
+                    self.spend_resource(resource.clone(), *amount).is_ok()
+                });
+
+                let healing = if resources_spent {
+                    healing.roll() as usize
+                } else {
+                    0
+                };
                 target.current_hp += healing;
                 if target.current_hp > target.max_hp {
                     target.current_hp = target.max_hp;
                 }
+
                 ActionResult::Heal { amount: healing }
             }
         }
@@ -95,13 +118,37 @@ impl Character {
     pub fn valid_actions(&self, allies: &Vec<Character>, enemies: &Vec<Character>) -> Vec<Action> {
         self.actions
             .iter()
-            .filter(|a| a.is_valid(allies, enemies))
+            .filter(|a| a.is_valid(self, allies, enemies))
             .cloned()
             .collect()
     }
 
     pub fn roll_initiative(&self) -> isize {
         DicePool::d20().add_modifier(self.initiative_bonus).roll()
+    }
+
+    pub fn add_resource(&mut self, resource_type: ResourceType, max: usize) {
+        self.resources.add_max(resource_type, max);
+    }
+
+    pub fn with_resources(mut self, resources: HashMap<ResourceType, usize>) -> Self {
+        for (resource_type, amount) in resources {
+            self.add_resource(resource_type, amount);
+        }
+        self
+    }
+
+    pub fn spend_resource(
+        &mut self,
+        resource_type: ResourceType,
+        amount: usize,
+    ) -> Result<(), String> {
+        self.resources.spend(resource_type, amount)
+    }
+
+    pub fn has_resource(&self, resource_type: &ResourceType, amount: usize) -> bool {
+        let resource = self.resources.get(resource_type);
+        resource >= amount
     }
 }
 
@@ -110,4 +157,159 @@ pub struct InitiativeEntry {
     pub team: Team,
     pub index: usize,
     pub initiative: isize,
+}
+
+#[derive(PartialEq, Eq, Hash, Debug, Clone)]
+pub enum ResourceType {
+    SpellSlot(usize),
+    Feature(String),
+    Points(String),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct Resources {
+    resources: HashMap<ResourceType, usize>,
+    max_resources: HashMap<ResourceType, usize>,
+}
+
+impl Resources {
+    fn new() -> Self {
+        Resources {
+            resources: HashMap::new(),
+            max_resources: HashMap::new(),
+        }
+    }
+
+    fn add_max(&mut self, resource_type: ResourceType, amount: usize) {
+        self.max_resources
+            .entry(resource_type.clone())
+            .or_insert(amount);
+        self.resources.entry(resource_type).or_insert(amount);
+    }
+
+    fn get(&self, resource_type: &ResourceType) -> usize {
+        match self.resources.get(resource_type) {
+            Some(resource) => *resource,
+            None => 0,
+        }
+    }
+
+    fn spend(&mut self, resource_type: ResourceType, amount: usize) -> Result<(), String> {
+        let r = self.resources.get_mut(&resource_type);
+        match r {
+            Some(r) => {
+                if *r >= amount {
+                    *r -= amount;
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "Resource {:?} was had {} and attempted to spend {}",
+                        resource_type, r, amount
+                    ))
+                }
+            }
+            None => Err(format!("Actor doesn't have resource {:?}", resource_type)),
+        }
+    }
+
+    fn recover(&mut self, resource_type: ResourceType, amount: usize) {
+        let current = self.resources.get_mut(&resource_type);
+        let max = self.max_resources.get(&resource_type).unwrap();
+
+        match current {
+            Some(r) => {
+                if *r + amount > *max {
+                    *r = *max;
+                } else {
+                    *r += amount;
+                }
+            }
+            None => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod resource_tests {
+    use super::*;
+
+    #[test]
+    fn test_spell_slot_spending() {
+        let mut resources = Resources::new();
+
+        // Level 1 slots
+        resources.add_max(ResourceType::SpellSlot(1), 4);
+        assert_eq!(resources.get(&ResourceType::SpellSlot(1)), 4);
+
+        resources.spend(ResourceType::SpellSlot(1), 1).unwrap();
+        assert_eq!(resources.get(&ResourceType::SpellSlot(1)), 3);
+
+        // Can't overspend
+        assert!(resources.spend(ResourceType::SpellSlot(1), 4).is_err());
+    }
+
+    #[test]
+    fn test_feature_usage() {
+        let mut resources = Resources::new();
+        resources.add_max(ResourceType::Feature("Second Wind".into()), 1);
+
+        resources
+            .spend(ResourceType::Feature("Second Wind".into()), 1)
+            .unwrap();
+        assert_eq!(
+            resources.get(&ResourceType::Feature("Second Wind".into())),
+            0
+        );
+
+        // Can't use when depleted
+        assert!(resources
+            .spend(ResourceType::Feature("Second Wind".into()), 1)
+            .is_err());
+    }
+
+    #[test]
+    fn test_point_pools() {
+        let mut resources = Resources::new();
+        resources.add_max(ResourceType::Points("Ki".into()), 5);
+
+        // Partial spending
+        resources
+            .spend(ResourceType::Points("Ki".into()), 2)
+            .unwrap();
+        assert_eq!(resources.get(&ResourceType::Points("Ki".into())), 3);
+
+        // Recovery up to max
+        resources.recover(ResourceType::Points("Ki".into()), 1);
+        assert_eq!(resources.get(&ResourceType::Points("Ki".into())), 4);
+
+        // Can't recover beyond max
+        resources.recover(ResourceType::Points("Ki".into()), 2);
+        assert_eq!(resources.get(&ResourceType::Points("Ki".into())), 5);
+    }
+
+    //   #[test]
+    //    fn test_rests() {
+    //        let mut resources = Resources::new();
+    //        resources.add_max(ResourceType::SpellSlot(1), 4);
+    //        resources.add_max(ResourceType::Feature("Second Wind".into()), 1);
+    //        resources.add_max(ResourceType::Points("Ki".into()), 5);
+
+    //        // Use some resources
+    //        resources.spend(ResourceType::SpellSlot(1), 2).unwrap();
+    //        resources.spend(ResourceType::Feature("Second Wind".into()), 1).unwrap();
+    //        resources.spend(ResourceType::Points("Ki".into()), 3).unwrap();
+
+    //        // Short rest recovers some
+    //        resources.short_rest();
+    //        assert_eq!(resources.get(ResourceType::SpellSlot(1)), 2); // Unchanged
+    //        assert_eq!(resources.get(ResourceType::Feature("Second Wind".into())), 1); // Recovered
+    //        assert_eq!(resources.get(ResourceType::Points("Ki".into())), 5); // Recovered
+
+    //        // Long rest recovers all
+    //        resources.spend(ResourceType::SpellSlot(1), 2).unwrap();
+    //        resources.long_rest();
+    //        assert_eq!(resources.get(ResourceType::SpellSlot(1)), 4);
+    //        assert_eq!(resources.get(ResourceType::Feature("Second Wind".into())), 1);
+    //        assert_eq!(resources.get(ResourceType::Points("Ki".into())), 5);
+    //    }
 }
